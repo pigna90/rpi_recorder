@@ -21,20 +21,42 @@ The application runs as a single-file Python script with hardware integration fo
 uv sync
 # OR
 pip install -e .
+
+# Copy environment template and configure
+cp .env.example .env
+# Edit .env with your WEBHOOK_URL and WEBHOOK_ENABLED settings
 ```
 
 ### Running the Application
 ```bash
-# Run the main recorder application
+# Run the main recorder application directly
 python recorder.py
+# OR with uv
+uv run python recorder.py
 
 # Stop recording with Ctrl+C
 ```
 
+### System Service Management
+```bash
+# Install as systemd service
+make install
+
+# Service control commands
+make start     # Start the service
+make stop      # Stop the service
+make restart   # Restart the service
+make status    # Check service status
+make logs      # View live service logs
+```
+
 ### Development Testing
 ```bash
-# Test webhook connectivity (modify WEBHOOK_URL in code)
-# Set WEBHOOK_ENABLED = False for testing without network calls
+# Test without webhook delivery
+# Set WEBHOOK_ENABLED=false in .env file
+
+# Check service logs for debugging
+sudo journalctl -u pi2-rec.service -f
 ```
 
 ## Architecture
@@ -56,14 +78,20 @@ python recorder.py
 - Minimum recording duration filtering (0.7s default)
 - Concurrent webhook delivery using background threads
 
-### Key Configuration Constants
+### Configuration
 
-Located at top of `recorder.py`:
-- `THRESHOLD = 0.01`: VAD sensitivity (lower = more sensitive)
-- `SILENCE_SECONDS = 1.5`: Duration of silence before stopping recording
-- `MIN_RECORD_SECONDS = 0.7`: Minimum recording length to save
+**Environment Variables (`.env` file):**
 - `WEBHOOK_URL`: External service endpoint for audio delivery
-- `WEBHOOK_ENABLED`: Toggle for webhook functionality
+- `WEBHOOK_ENABLED`: Toggle for webhook functionality (`true`/`false`)
+
+**Constants in `recorder.py`:**
+- `SAMPLE_RATE = 44100`: Audio sample rate
+- `CHANNELS = 4`: Number of audio input channels
+- `DEVICE = 0`: Audio input device index
+- `THRESHOLD = 900`: VAD sensitivity (lower = more sensitive)
+- `SILENCE_SECONDS = 2.0`: Duration of silence before stopping recording
+- `MIN_RECORD_SECONDS = 0.7`: Minimum recording length to save
+- `BLOCK_DURATION = 0.1`: Audio processing block size (seconds)
 
 ### Threading Architecture
 
@@ -75,7 +103,26 @@ The application uses strategic threading to prevent audio dropouts:
 ### File Structure
 - `recorder.py`: Single-file application containing all functionality
 - `pyproject.toml`: Python packaging and dependency configuration
+- `pi2-rec.service`: Systemd service configuration for auto-start
+- `Makefile`: Service management commands
+- `.env.example`: Environment variables template
 - `recordings/`: Auto-created directory for saved WAV files
+
+### Deployment
+
+The application can be deployed as a systemd service for automatic startup:
+
+**Service Configuration:**
+- User: `dietpi` (configurable in `pi2-rec.service`)
+- Resource limits: 512MB RAM, 50% CPU
+- Auto-restart on failure with 10s delay
+- Depends on network and sound targets
+
+**Installation Process:**
+1. Install dependencies with `uv sync`
+2. Configure `.env` file with webhook settings
+3. Install service with `make install`
+4. Start service with `make start`
 
 ## Hardware Requirements
 
@@ -90,3 +137,6 @@ The application uses strategic threading to prevent audio dropouts:
 - `luma.oled`: OLED display control
 - `Pillow`: Image processing for display graphics
 - `requests`: HTTP webhook delivery
+- `python-dotenv`: Environment variable management
+- `pydub`: Audio processing utilities
+- `ffmpeg-python`: Audio format conversion support
