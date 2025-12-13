@@ -47,8 +47,37 @@ def init_display():
         print(f"OLED init failed: {e}")
         return None
 
+def get_gain_recommendation(peak_level):
+    """Analyze peak level and provide gain recommendations"""
+    if peak_level < 500:
+        return "GAIN: TOO LOW"
+    elif peak_level < 1500:
+        return "GAIN: LOW"
+    elif peak_level < 8000:
+        return "GAIN: GOOD"
+    elif peak_level < 20000:
+        return "GAIN: HIGH"
+    else:
+        return "GAIN: TOO HIGH"
+
+def get_signal_quality(peak_level, min_level):
+    """Assess signal quality based on dynamic range"""
+    if peak_level == 0:
+        return "NO SIGNAL"
+
+    dynamic_range = peak_level / max(min_level, 1)  # Avoid division by zero
+
+    if dynamic_range < 2:
+        return "POOR SNR"
+    elif dynamic_range < 5:
+        return "OK SNR"
+    elif dynamic_range < 10:
+        return "GOOD SNR"
+    else:
+        return "EXCELLENT SNR"
+
 def update_oled_display(device, channel_levels, max_level, peak_level, min_level, current_threshold=900):
-    """Update OLED display with current audio levels and threshold info"""
+    """Update OLED display with current audio levels and gain analysis"""
     if device is None:
         return
 
@@ -59,38 +88,39 @@ def update_oled_display(device, channel_levels, max_level, peak_level, min_level
     # Title
     draw.text((0, 0), "AUDIO MONITOR", fill=255, font=font)
 
-    # Channel levels
+    # Channel levels (compact display - only show 2 channels due to space)
     y = 12
-    for i, level in enumerate(channel_levels):
-        # Channel label and value
-        draw.text((0, y), f"Ch{i+1}:", fill=255, font=font)
-        draw.text((25, y), f"{level:4.0f}", fill=255, font=font)
-
-        # Level bar (0-60 pixels wide)
-        bar_width = min(60, int(level / 20))  # Scale: level/20 = pixels
+    for i in range(min(2, len(channel_levels))):
+        level = channel_levels[i]
+        draw.text((0, y), f"Ch{i+1}: {level:4.0f}", fill=255, font=font)
+        # Level bar
+        bar_width = min(50, int(level / 20))
         if bar_width > 0:
-            draw.rectangle([60, y+1, 60+bar_width, y+7], fill=255)
-        # Bar outline
-        draw.rectangle([60, y+1, 120, y+7], outline=255)
-        y += 10
+            draw.rectangle([70, y+1, 70+bar_width, y+6], fill=255)
+        draw.rectangle([70, y+1, 120, y+6], outline=255)
+        y += 9
 
-    # Current level
+    # Current, Max, Min levels
     draw.text((0, y), f"CUR: {max_level:4.0f}", fill=255, font=font)
-    y += 10
-
-    # Peak and Min levels
+    y += 9
     draw.text((0, y), f"MAX: {peak_level:4.0f}", fill=255, font=font)
-    y += 10
+    y += 9
     draw.text((0, y), f"MIN: {min_level:4.0f}", fill=255, font=font)
-    y += 10
+    y += 9
 
-    # Current threshold
-    draw.text((0, y), f"Threshold: {current_threshold}", fill=255, font=font)
-    y += 10
+    # Gain recommendation
+    gain_rec = get_gain_recommendation(peak_level)
+    draw.text((0, y), gain_rec, fill=255, font=font)
+    y += 9
+
+    # Signal quality
+    quality = get_signal_quality(peak_level, min_level)
+    draw.text((0, y), quality, fill=255, font=font)
+    y += 9
 
     # Recording status
-    status = "RECORDING" if max_level >= current_threshold else "SILENT"
-    draw.text((0, y), status, fill=255, font=font)
+    status = "REC" if max_level >= current_threshold else "SILENT"
+    draw.text((0, y), f"{status} ({current_threshold})", fill=255, font=font)
 
     device.display(img)
 
@@ -156,7 +186,29 @@ def main():
         print(f"\n\nMonitoring stopped.")
         print(f"Maximum level recorded: {max_seen}")
         print(f"Minimum level recorded: {min_seen if min_seen != float('inf') else 0}")
-        print(f"\nChoose your threshold between {min_seen if min_seen != float('inf') else 0} and {max_seen}")
+
+        # Gain analysis
+        gain_rec = get_gain_recommendation(max_seen)
+        quality = get_signal_quality(max_seen, min_seen if min_seen != float('inf') else 0)
+
+        print(f"\n=== GAIN ANALYSIS ===")
+        print(f"Gain status: {gain_rec}")
+        print(f"Signal quality: {quality}")
+
+        if max_seen < 500:
+            print(f"\n🔴 INCREASE GAIN on your audio interface!")
+            print(f"   Your levels are too low for good recording quality.")
+        elif max_seen < 1500:
+            print(f"\n🟡 Consider increasing gain slightly")
+            print(f"   You have headroom to increase input levels.")
+        elif max_seen > 20000:
+            print(f"\n🔴 DECREASE GAIN - risk of clipping!")
+            print(f"   Your levels are too high and may distort.")
+        else:
+            print(f"\n✅ Gain levels look good!")
+
+        print(f"\n=== THRESHOLD RECOMMENDATION ===")
+        print(f"Choose threshold between {min_seen if min_seen != float('inf') else 0} and {max_seen}")
         print(f"Current recorder.py threshold: 900")
         print(f"\nTo change threshold, edit recorder.py and update:")
         print(f"  THRESHOLD = 900")
