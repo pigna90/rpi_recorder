@@ -76,7 +76,16 @@ def get_signal_quality(peak_level, min_level):
     else:
         return "EXCELLENT SNR"
 
-def update_oled_display(device, channel_levels, max_level, peak_level, min_level, current_threshold=900):
+def get_level_indicator(level):
+    """Get simple gain indicator for individual channel levels"""
+    if level < 1500:
+        return "L"  # Low
+    elif level < 8000:
+        return "G"  # Good
+    else:
+        return "H"  # High
+
+def update_oled_display(device, channel_levels, max_level, peak_level, min_level, current_threshold=10000):
     """Update OLED display with current audio levels and gain analysis"""
     if device is None:
         return
@@ -88,39 +97,22 @@ def update_oled_display(device, channel_levels, max_level, peak_level, min_level
     # Title
     draw.text((0, 0), "AUDIO MONITOR", fill=255, font=font)
 
-    # Channel levels (compact display - only show 2 channels due to space)
+    # All 4 channel levels with L/G/H indicators
     y = 12
-    for i in range(min(2, len(channel_levels))):
-        level = channel_levels[i]
-        draw.text((0, y), f"Ch{i+1}: {level:4.0f}", fill=255, font=font)
-        # Level bar
-        bar_width = min(50, int(level / 20))
+    for i, level in enumerate(channel_levels):
+        indicator = get_level_indicator(level)
+        draw.text((0, y), f"Ch{i+1}:{level:4.0f} {indicator}", fill=255, font=font)
+        # Compact level bar
+        bar_width = min(35, int(level / 30))
         if bar_width > 0:
-            draw.rectangle([70, y+1, 70+bar_width, y+6], fill=255)
-        draw.rectangle([70, y+1, 120, y+6], outline=255)
-        y += 9
+            draw.rectangle([85, y+1, 85+bar_width, y+6], fill=255)
+        draw.rectangle([85, y+1, 120, y+6], outline=255)
+        y += 10
 
     # Current, Max, Min levels
     draw.text((0, y), f"CUR: {max_level:4.0f}", fill=255, font=font)
-    y += 9
+    y += 8
     draw.text((0, y), f"MAX: {peak_level:4.0f}", fill=255, font=font)
-    y += 9
-    draw.text((0, y), f"MIN: {min_level:4.0f}", fill=255, font=font)
-    y += 9
-
-    # Gain recommendation
-    gain_rec = get_gain_recommendation(peak_level)
-    draw.text((0, y), gain_rec, fill=255, font=font)
-    y += 9
-
-    # Signal quality
-    quality = get_signal_quality(peak_level, min_level)
-    draw.text((0, y), quality, fill=255, font=font)
-    y += 9
-
-    # Recording status
-    status = "REC" if max_level >= current_threshold else "SILENT"
-    draw.text((0, y), f"{status} ({current_threshold})", fill=255, font=font)
 
     device.display(img)
 
