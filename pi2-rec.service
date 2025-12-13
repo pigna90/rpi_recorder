@@ -1,0 +1,28 @@
+[Unit]
+Description=Raspberry Pi Voice-Activated Recorder (pi2-rec)
+After=network.target sound.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=dietpi
+Group=dietpi
+WorkingDirectory=/home/dietpi/rpi_recorder
+ExecStart=/home/dietpi/rpi_recorder/.venv/bin/python /home/dietpi/rpi_recorder/recorder.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables
+Environment=PYTHONUNBUFFERED=1
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
+# Allow access to hardware devices
+PrivateDevices=false
+
+[Install]
+WantedBy=multi-user.target
