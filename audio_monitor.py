@@ -94,25 +94,23 @@ def update_oled_display(device, channel_levels, max_level, peak_level, min_level
     draw = ImageDraw.Draw(img)
     font = ImageFont.load_default()
 
-    # Title
-    draw.text((0, 0), "AUDIO MONITOR", fill=255, font=font)
+    # Title - smaller
+    draw.text((0, 0), "AUDIO", fill=255, font=font)
 
-    # All 4 channel levels with L/G/H indicators
-    y = 12
+    # All 4 channel levels with L/G/H indicators - more compact
+    y = 9
     for i, level in enumerate(channel_levels):
         indicator = get_level_indicator(level)
-        draw.text((0, y), f"Ch{i+1}:{level:4.0f} {indicator}", fill=255, font=font)
+        draw.text((0, y), f"{i+1}:{int(level)} {indicator}", fill=255, font=font)
         # Compact level bar
-        bar_width = min(35, int(level / 30))
+        bar_width = min(30, int(level / 35))
         if bar_width > 0:
-            draw.rectangle([85, y+1, 85+bar_width, y+6], fill=255)
-        draw.rectangle([85, y+1, 120, y+6], outline=255)
-        y += 10
+            draw.rectangle([60, y+1, 60+bar_width, y+5], fill=255)
+        draw.rectangle([60, y+1, 90, y+5], outline=255)
+        y += 9
 
-    # Current, Max, Min levels
-    draw.text((0, y), f"CUR: {max_level:4.0f}", fill=255, font=font)
-    y += 8
-    draw.text((0, y), f"MAX: {peak_level:4.0f}", fill=255, font=font)
+    # Current and Max on same line to save space
+    draw.text((0, y), f"C:{int(max_level)} M:{int(peak_level)}", fill=255, font=font)
 
     device.display(img)
 
@@ -122,7 +120,7 @@ def main():
     print("Audio Level Monitor for Pi2-Rec Threshold Calibration")
     print("=" * 60)
     print(f"Monitoring {CHANNELS} channels at {SAMPLE_RATE}Hz")
-    print(f"Current threshold in recorder.py: 900")
+    print(f"Current threshold in recorder.py: 10000")
     print("\nLevels shown on OLED display only")
     print("Press Ctrl+C to stop\n")
 
@@ -201,9 +199,9 @@ def main():
 
         print(f"\n=== THRESHOLD RECOMMENDATION ===")
         print(f"Choose threshold between {min_seen if min_seen != float('inf') else 0} and {max_seen}")
-        print(f"Current recorder.py threshold: 900")
+        print(f"Current recorder.py threshold: 10000")
         print(f"\nTo change threshold, edit recorder.py and update:")
-        print(f"  THRESHOLD = 900")
+        print(f"  THRESHOLD = 10000")
         print(f"to your preferred value")
 
     except Exception as e:
