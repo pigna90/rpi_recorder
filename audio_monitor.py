@@ -93,37 +93,14 @@ def update_oled_display(device, channel_levels, max_level, suggested_threshold, 
 
     device.display(img)
 
-def print_levels(levels, max_level, current_threshold=900):
-    """Print audio levels in a visual format"""
-    # Clear line and move cursor to beginning
-    print('\r', end='')
-
-    # Show individual channel levels
-    channel_bars = []
-    for i, level in enumerate(levels):
-        # Create a simple bar graph (0-50 characters)
-        bar_length = min(50, int(level / 50))
-        bar = '█' * bar_length + '░' * (50 - bar_length)
-        channel_bars.append(f"Ch{i+1}: {level:4.0f} |{bar[:20]}|")
-
-    # Show max level and threshold comparison
-    max_bar_length = min(50, int(max_level / 50))
-    max_bar = '█' * max_bar_length + '░' * (50 - max_bar_length)
-
-    # Threshold indicator
-    threshold_status = "🔴 RECORDING" if max_level >= current_threshold else "⚪ SILENT"
-
-    output = (f"MAX: {max_level:4.0f} |{max_bar[:30]}| "
-              f"Threshold: {current_threshold} {threshold_status}")
-
-    print(output, end='', flush=True)
+# Removed print_levels function - no more terminal updates
 
 def main():
     print("Audio Level Monitor for Pi2-Rec Threshold Calibration")
     print("=" * 60)
     print(f"Monitoring {CHANNELS} channels at {SAMPLE_RATE}Hz")
     print(f"Current threshold in recorder.py: 900")
-    print("\nShows levels on OLED display AND terminal")
+    print("\nLevels shown on OLED display only")
     print("Press Ctrl+C to stop\n")
 
     # Initialize OLED display
@@ -168,20 +145,8 @@ def main():
                     # Calculate suggested threshold
                     suggested_threshold = int(max_seen * 0.3) if max_seen > 0 else 0
 
-                    # Update OLED display
+                    # Update OLED display (silent - no terminal output)
                     update_oled_display(device, channel_levels, max_level, suggested_threshold)
-
-                    # Only show terminal statistics every 50 samples (~5 seconds)
-                    if samples_count % 50 == 0:
-                        print(f"Statistics after {samples_count * BLOCK_DURATION:.1f}s:")
-                        print(f"  Current MAX: {max_level:4.0f}")
-                        print(f"  Peak level seen: {max_seen}")
-                        print(f"  Current threshold: 900")
-                        if max_seen > 0:
-                            print(f"  Suggested threshold: {suggested_threshold}")
-                        status = "RECORDING" if max_level >= 900 else "SILENT"
-                        print(f"  Status: {status}")
-                        print("-" * 40)
 
                 except Exception as e:
                     print(f"\nError reading audio: {e}")
