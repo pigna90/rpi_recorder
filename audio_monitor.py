@@ -171,17 +171,17 @@ def main():
                     # Update OLED display
                     update_oled_display(device, channel_levels, max_level, suggested_threshold)
 
-                    # Print levels every block to terminal
-                    print_levels(channel_levels, max_level)
-
-                    # Every 50 samples (~5 seconds), show statistics in terminal
+                    # Only show terminal statistics every 50 samples (~5 seconds)
                     if samples_count % 50 == 0:
-                        print(f"\n\nStatistics after {samples_count * BLOCK_DURATION:.1f}s:")
+                        print(f"Statistics after {samples_count * BLOCK_DURATION:.1f}s:")
+                        print(f"  Current MAX: {max_level:4.0f}")
                         print(f"  Peak level seen: {max_seen}")
-                        print(f"  Current recorder threshold: 900")
+                        print(f"  Current threshold: 900")
                         if max_seen > 0:
-                            print(f"  Suggested threshold (30% of peak): {suggested_threshold}")
-                        print()
+                            print(f"  Suggested threshold: {suggested_threshold}")
+                        status = "RECORDING" if max_level >= 900 else "SILENT"
+                        print(f"  Status: {status}")
+                        print("-" * 40)
 
                 except Exception as e:
                     print(f"\nError reading audio: {e}")
