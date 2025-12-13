@@ -47,7 +47,7 @@ def init_display():
         print(f"OLED init failed: {e}")
         return None
 
-def update_oled_display(device, channel_levels, max_level, suggested_threshold, current_threshold=900):
+def update_oled_display(device, channel_levels, max_level, peak_level, min_level, current_threshold=900):
     """Update OLED display with current audio levels and threshold info"""
     if device is None:
         return
@@ -74,18 +74,19 @@ def update_oled_display(device, channel_levels, max_level, suggested_threshold, 
         draw.rectangle([60, y+1, 120, y+7], outline=255)
         y += 10
 
-    # Max level
-    draw.text((0, y), f"MAX: {max_level:4.0f}", fill=255, font=font)
+    # Current level
+    draw.text((0, y), f"CUR: {max_level:4.0f}", fill=255, font=font)
+    y += 10
+
+    # Peak and Min levels
+    draw.text((0, y), f"MAX: {peak_level:4.0f}", fill=255, font=font)
+    y += 10
+    draw.text((0, y), f"MIN: {min_level:4.0f}", fill=255, font=font)
     y += 10
 
     # Current threshold
     draw.text((0, y), f"Threshold: {current_threshold}", fill=255, font=font)
     y += 10
-
-    # Suggested threshold
-    if suggested_threshold > 0:
-        draw.text((0, y), f"Suggested: {suggested_threshold}", fill=255, font=font)
-        y += 10
 
     # Recording status
     status = "RECORDING" if max_level >= current_threshold else "SILENT"
@@ -121,6 +122,7 @@ def main():
         ) as stream:
 
             max_seen = 0
+            min_seen = float('inf')
             samples_count = 0
 
             while True:
@@ -140,13 +142,11 @@ def main():
 
                     max_level = max(channel_levels)
                     max_seen = max(max_seen, max_level)
+                    min_seen = min(min_seen, max_level)
                     samples_count += 1
 
-                    # Calculate suggested threshold
-                    suggested_threshold = int(max_seen * 0.3) if max_seen > 0 else 0
-
                     # Update OLED display (silent - no terminal output)
-                    update_oled_display(device, channel_levels, max_level, suggested_threshold)
+                    update_oled_display(device, channel_levels, max_level, max_seen, min_seen)
 
                 except Exception as e:
                     print(f"\nError reading audio: {e}")
@@ -154,14 +154,13 @@ def main():
 
     except KeyboardInterrupt:
         print(f"\n\nMonitoring stopped.")
-        print(f"Peak level recorded: {max_seen}")
-        if max_seen > 0:
-            suggested_threshold = int(max_seen * 0.3)
-            print(f"Suggested threshold for recorder.py: {suggested_threshold}")
-            print(f"\nTo use this threshold, edit recorder.py and change:")
-            print(f"  THRESHOLD = 900")
-            print(f"to:")
-            print(f"  THRESHOLD = {suggested_threshold}")
+        print(f"Maximum level recorded: {max_seen}")
+        print(f"Minimum level recorded: {min_seen if min_seen != float('inf') else 0}")
+        print(f"\nChoose your threshold between {min_seen if min_seen != float('inf') else 0} and {max_seen}")
+        print(f"Current recorder.py threshold: 900")
+        print(f"\nTo change threshold, edit recorder.py and update:")
+        print(f"  THRESHOLD = 900")
+        print(f"to your preferred value")
 
     except Exception as e:
         print(f"Error initializing audio: {e}")
