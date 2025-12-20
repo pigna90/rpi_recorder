@@ -7,6 +7,8 @@ import requests
 import threading
 import struct
 import logging
+import signal
+import sys
 from dotenv import load_dotenv
 
 # OLED imports
@@ -229,6 +231,15 @@ def show_rec(device):
     device.display(img)
 
 
+# ---------- AUDIO TIMEOUT HANDLER ----------
+
+def audio_timeout_handler(signum, frame):
+    """Handle audio stream timeout - exit cleanly for systemd restart"""
+    logger.error("Audio stream timeout detected - audio hardware may be hung")
+    logger.error("Exiting for systemd restart...")
+    sys.exit(1)
+
+
 # ---------- AUDIO + WEBHOOK ----------
 
 def open_new_wav():
@@ -316,6 +327,10 @@ def main():
     except (PermissionError, OSError):
         logger.warning("Could not change process priority (permission or OS limitation)")
 
+    # Set up audio stream timeout handler
+    signal.signal(signal.SIGALRM, audio_timeout_handler)
+    logger.info("Audio stream timeout handler configured (10s timeout)")
+
     # Init OLED
     device = init_display()
     show_ready(device)
@@ -340,7 +355,11 @@ def main():
     ) as stream:
         try:
             while True:
+                # Set 10-second timeout for audio stream read
+                signal.alarm(10)
                 data_raw, overflowed = stream.read(BLOCK_SIZE)
+                signal.alarm(0)  # Cancel timeout - read completed successfully
+
                 if overflowed:
                     logger.warning("Audio overflow (XRUN) - system too slow for real-time audio")
 
