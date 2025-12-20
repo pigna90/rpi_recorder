@@ -321,11 +321,11 @@ def send_webhook_async(file_path):
 
 
 def main():
-    try:
-        os.nice(-10)
-        logger.info("Set higher process priority for audio")
-    except (PermissionError, OSError):
-        logger.warning("Could not change process priority (permission or OS limitation)")
+    # try:
+    #     os.nice(-10)
+    #     logger.info("Set higher process priority for audio")
+    # except (PermissionError, OSError):
+    #     logger.warning("Could not change process priority (permission or OS limitation)")
 
     # Set up audio stream timeout handler
     signal.signal(signal.SIGALRM, audio_timeout_handler)
