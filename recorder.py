@@ -55,20 +55,16 @@ os.makedirs("recordings", exist_ok=True)
 
 # ---------- MIXING: 4ch int16 -> stereo (full volume sum) ----------
 
-def mix4_to_stereo_sum(raw_bytes):
+def mix4_to_stereo_mono(raw_bytes):
     """
     Input: 4ch int16 interleaved frames [ch1,ch2,ch3,ch4,...]
-    Output: stereo int16 frames [M,M,...] where M = sum of all channels (clamped).
+    Output: stereo int16 frames [M,M,...] where M = average of ch1..ch4.
     """
     samples = struct.iter_unpack("<hhhh", raw_bytes)  # ch1,ch2,ch3,ch4 per frame
     out = bytearray()
 
     for ch1, ch2, ch3, ch4 in samples:
-        # Sum all channels (preserves full volume)
-        m = ch1 + ch2 + ch3 + ch4
-
-        # Clamp to int16 range to prevent overflow distortion
-        m = max(-32768, min(32767, m))
+        m = (ch1 + ch2 + ch3 + ch4) // 4
         out.extend(struct.pack("<hh", m, m))  # L = m, R = m
 
     return bytes(out)
@@ -467,13 +463,13 @@ def main():
                         silence_time = 0.0
                         recording = True
 
-                        stereo_data = mix4_to_stereo_sum(data)
+                        stereo_data = mix4_to_stereo_mono(data)
                         wav_file.writeframes(stereo_data)
 
                         logger.info(f"Recording started (level={level})")
                         show_rec(device)
                 else:
-                    stereo_data = mix4_to_stereo_sum(data)
+                    stereo_data = mix4_to_stereo_mono(data)
                     wav_file.writeframes(stereo_data)
 
                     if level < THRESHOLD:
