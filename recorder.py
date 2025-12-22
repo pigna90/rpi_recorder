@@ -402,6 +402,9 @@ def start_systemd_watchdog():
 
 
 def main():
+    # Global variables for pre-opened WAV files
+    global prepared_wav_file, prepared_filename
+
     # try:
     #     os.nice(-10)
     #     logger.info("Set higher process priority for audio")
@@ -465,7 +468,6 @@ def main():
                 if not recording:
                     if level >= THRESHOLD:
                         # Use pre-opened file - ZERO blocking!
-                        global prepared_wav_file, prepared_filename
                         wav_file = prepared_wav_file
                         current_filename = prepared_filename
 
@@ -502,12 +504,10 @@ def main():
                             except OSError:
                                 pass
                             # Prepare next file even for deleted recordings
-                            global prepared_wav_file, prepared_filename
                             prepared_wav_file, prepared_filename = prepare_next_wav_file()
                         else:
                             logger.info(f"Recording completed: {duration:.2f}s")
                             # Prepare next file for zero-delay startup
-                            global prepared_wav_file, prepared_filename
                             prepared_wav_file, prepared_filename = prepare_next_wav_file()
 
                             # Normalize stereo file
@@ -534,7 +534,6 @@ def main():
                 if duration >= MIN_RECORD_SECONDS:
                     logger.info(f"Final recording saved: {duration:.2f}s")
                     # Prepare next file for zero-delay startup
-                    global prepared_wav_file, prepared_filename
                     prepared_wav_file, prepared_filename = prepare_next_wav_file()
 
                     # Normalize stereo file
