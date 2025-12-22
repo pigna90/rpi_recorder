@@ -5,6 +5,7 @@ import os
 import audioop
 import requests
 import threading
+import struct
 import logging
 import signal
 import sys
@@ -50,6 +51,27 @@ if not WEBHOOK_URL and os.getenv("WEBHOOK_ENABLED", "false").lower() == "true":
 WEBHOOK_ENABLED = os.getenv("WEBHOOK_ENABLED", "true").lower() == "true"
 
 os.makedirs("recordings", exist_ok=True)
+
+
+# ---------- MIXING: 4ch int16 -> stereo (full volume sum) ----------
+
+def mix4_to_stereo_sum(raw_bytes):
+    """
+    Input: 4ch int16 interleaved frames [ch1,ch2,ch3,ch4,...]
+    Output: stereo int16 frames [M,M,...] where M = sum of all channels (clamped).
+    """
+    samples = struct.iter_unpack("<hhhh", raw_bytes)  # ch1,ch2,ch3,ch4 per frame
+    out = bytearray()
+
+    for ch1, ch2, ch3, ch4 in samples:
+        # Sum all channels (preserves full volume)
+        m = ch1 + ch2 + ch3 + ch4
+
+        # Clamp to int16 range to prevent overflow distortion
+        m = max(-32768, min(32767, m))
+        out.extend(struct.pack("<hh", m, m))  # L = m, R = m
+
+    return bytes(out)
 
 
 # ---------- OLED HELPERS (SAFE, ONLY ON STATE CHANGES) ----------
@@ -233,9 +255,9 @@ def audio_timeout_handler(signum, frame):
 
 def open_new_wav():
     ts = time.strftime("%Y%m%d_%H%M%S")
-    filename = f"recordings/vad_{ts}_4ch.wav"
+    filename = f"recordings/vad_{ts}_stereo.wav"
     wf = wave.open(filename, "wb")
-    wf.setnchannels(4)       # 4-channel output (no mixing)
+    wf.setnchannels(2)       # stereo output (mixed from 4ch)
     wf.setsampwidth(2)       # int16
     wf.setframerate(SAMPLE_RATE)
     return wf, filename
@@ -264,7 +286,7 @@ def send_webhook(file_path):
                 'Content-Disposition': f'attachment; filename="{filename}"',
                 'X-Timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
             },
-            timeout=30,
+            timeout=60,
             verify=True
         )
 
@@ -284,7 +306,7 @@ def send_webhook(file_path):
                     'Content-Disposition': f'attachment; filename="{filename}"',
                     'X-Timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
                 },
-                timeout=30,
+                timeout=60,
                 verify=False
             )
             if response.status_code == 200:
@@ -445,12 +467,14 @@ def main():
                         silence_time = 0.0
                         recording = True
 
-                        wav_file.writeframes(data)
+                        stereo_data = mix4_to_stereo_sum(data)
+                        wav_file.writeframes(stereo_data)
 
                         logger.info(f"Recording started (level={level})")
                         show_rec(device)
                 else:
-                    wav_file.writeframes(data)
+                    stereo_data = mix4_to_stereo_sum(data)
+                    wav_file.writeframes(stereo_data)
 
                     if level < THRESHOLD:
                         silence_time += BLOCK_DURATION
