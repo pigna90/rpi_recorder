@@ -249,14 +249,20 @@ def audio_timeout_handler(signum, frame):
 
 # ---------- AUDIO + WEBHOOK ----------
 
-def open_new_wav():
+def prepare_next_wav_file():
+    """Pre-create next WAV file to eliminate blocking on recording start"""
     ts = time.strftime("%Y%m%d_%H%M%S")
     filename = f"recordings/vad_{ts}_stereo.wav"
     wf = wave.open(filename, "wb")
-    wf.setnchannels(2)       # stereo output (mixed during recording)
-    wf.setsampwidth(2)       # int16
-    wf.setframerate(SAMPLE_RATE)
+    wf.setparams((2, 2, SAMPLE_RATE, 0, 'NONE', 'not compressed'))
     return wf, filename
+
+# Global pre-opened file variables
+prepared_wav_file = None
+prepared_filename = None
+
+# Pre-create first file to eliminate startup delay
+prepared_wav_file, prepared_filename = prepare_next_wav_file()
 
 
 def send_webhook(file_path):
@@ -458,19 +464,27 @@ def main():
 
                 if not recording:
                     if level >= THRESHOLD:
-                        wav_file, current_filename = open_new_wav()
+                        # Use pre-opened file - ZERO blocking!
+                        global prepared_wav_file, prepared_filename
+                        wav_file = prepared_wav_file
+                        current_filename = prepared_filename
+
+                        # Set recording state
+                        recording = True
                         record_start_time = time.time()
                         silence_time = 0.0
-                        recording = True
 
-                        stereo_data = mix4_to_stereo_mono(data)
-                        wav_file.writeframes(stereo_data)
-
-                        logger.info(f"Recording started (level={level})")
-                        show_rec(device)
-                else:
+                if recording:
+                    # Process and write audio (happens for first block too)
                     stereo_data = mix4_to_stereo_mono(data)
                     wav_file.writeframes(stereo_data)
+
+                    # Log only on the first write
+                    if record_start_time is not None and time.time() - record_start_time < 0.2:
+                        logger.info(f"Recording started (level={level})")
+                        show_rec(device)
+                        # Clear the flag so we don't log repeatedly
+                        record_start_time = time.time()  # Reset to prevent re-logging
 
                     if level < THRESHOLD:
                         silence_time += BLOCK_DURATION
@@ -487,8 +501,15 @@ def main():
                                 logger.info(f"Recording too short ({duration:.2f}s), deleted")
                             except OSError:
                                 pass
+                            # Prepare next file even for deleted recordings
+                            global prepared_wav_file, prepared_filename
+                            prepared_wav_file, prepared_filename = prepare_next_wav_file()
                         else:
                             logger.info(f"Recording completed: {duration:.2f}s")
+                            # Prepare next file for zero-delay startup
+                            global prepared_wav_file, prepared_filename
+                            prepared_wav_file, prepared_filename = prepare_next_wav_file()
+
                             # Normalize stereo file
                             normalize_audio_file(current_filename)
                             if WEBHOOK_ENABLED:
@@ -512,6 +533,10 @@ def main():
 
                 if duration >= MIN_RECORD_SECONDS:
                     logger.info(f"Final recording saved: {duration:.2f}s")
+                    # Prepare next file for zero-delay startup
+                    global prepared_wav_file, prepared_filename
+                    prepared_wav_file, prepared_filename = prepare_next_wav_file()
+
                     # Normalize stereo file
                     normalize_audio_file(current_filename)
                     if WEBHOOK_ENABLED:
@@ -524,6 +549,7 @@ def main():
                         logger.info(f"Final recording too short ({duration:.2f}s), deleted")
                     except OSError:
                         pass
+                    # Note: No need to prepare next file since program is exiting
 
             show_ready(device)
 
