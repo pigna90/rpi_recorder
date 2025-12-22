@@ -11,6 +11,13 @@ import signal
 import sys
 from dotenv import load_dotenv
 
+# Systemd watchdog support
+try:
+    import systemd.daemon
+    SYSTEMD_AVAILABLE = True
+except ImportError:
+    SYSTEMD_AVAILABLE = False
+
 # OLED imports
 from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
@@ -331,6 +338,13 @@ def main():
     signal.signal(signal.SIGALRM, audio_timeout_handler)
     logger.info("Audio stream timeout handler configured (10s timeout)")
 
+    # Systemd watchdog setup
+    if SYSTEMD_AVAILABLE:
+        systemd.daemon.notify("READY=1")
+        logger.info("Systemd watchdog enabled - sending periodic pings")
+    else:
+        logger.info("Systemd watchdog not available (running manually)")
+
     # Init OLED
     device = init_display()
     show_ready(device)
@@ -340,6 +354,10 @@ def main():
     current_filename = None
     record_start_time = None
     silence_time = 0.0
+
+    # Watchdog ping counter (send ping every ~5 seconds = 50 blocks of 0.1s each)
+    watchdog_counter = 0
+    WATCHDOG_INTERVAL = 50
 
     logger.info("VAD recorder ready - listening for audio")
     logger.info(f"Threshold: {THRESHOLD}, Silence timeout: {SILENCE_SECONDS}s")
@@ -364,6 +382,12 @@ def main():
                     logger.warning("Audio overflow (XRUN) - system too slow for real-time audio")
 
                 data = bytes(data_raw)
+
+                # Send systemd watchdog ping every ~5 seconds
+                watchdog_counter += 1
+                if SYSTEMD_AVAILABLE and watchdog_counter >= WATCHDOG_INTERVAL:
+                    systemd.daemon.notify("WATCHDOG=1")
+                    watchdog_counter = 0
 
                 # VAD uses all 4 channels as before
                 channel_levels = []

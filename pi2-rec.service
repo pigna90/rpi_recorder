@@ -1,16 +1,29 @@
 [Unit]
 Description=Raspberry Pi Voice-Activated Recorder (pi2-rec)
-After=network.target sound.target
-Wants=network.target
+Documentation=https://github.com/youruser/rpi_recorder
+After=network-online.target sound.target
+Wants=network-online.target
+Requires=sound.target
 
 [Service]
-Type=simple
+Type=notify
 User=dietpi
-Group=dietpi
+Group=audio
 WorkingDirectory=/home/dietpi/rpi_recorder
 ExecStart=/home/dietpi/rpi_recorder/.venv/bin/python /home/dietpi/rpi_recorder/recorder.py
+EnvironmentFile=-/home/dietpi/rpi_recorder/.env
+
+# Systemd watchdog configuration
+WatchdogSec=30
+NotifyAccess=main
+
+# Restart configuration
 Restart=always
 RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Logging
 StandardOutput=journal
 StandardError=journal
 
@@ -21,7 +34,17 @@ Environment=PYTHONUNBUFFERED=1
 MemoryMax=512M
 CPUQuota=50%
 
-# Allow access to hardware devices
+# Process management
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths=/home/dietpi/rpi_recorder/recordings
+DeviceAllow=/dev/snd rw
 PrivateDevices=false
 
 [Install]
