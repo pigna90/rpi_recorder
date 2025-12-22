@@ -58,13 +58,28 @@ os.makedirs("recordings", exist_ok=True)
 def mix4_to_stereo_mono(raw_bytes):
     """
     Input: 4ch int16 interleaved frames [ch1,ch2,ch3,ch4,...]
-    Output: stereo int16 frames [M,M,...] where M = average of ch1..ch4.
+    Output: stereo int16 frames [M,M,...] where M = adaptive mix of active channels.
     """
     samples = struct.iter_unpack("<hhhh", raw_bytes)  # ch1,ch2,ch3,ch4 per frame
     out = bytearray()
 
+    # Threshold to determine if a channel is "active" (above noise floor)
+    ACTIVE_THRESHOLD = 800
+
     for ch1, ch2, ch3, ch4 in samples:
-        m = (ch1 + ch2 + ch3 + ch4) // 4
+        # Count and sum only active channels
+        channels = [ch1, ch2, ch3, ch4]
+        active_channels = [ch for ch in channels if abs(ch) > ACTIVE_THRESHOLD]
+
+        if active_channels:
+            # Average only the active channels (maintains volume for solo instruments)
+            m = sum(active_channels) // len(active_channels)
+        else:
+            # If no channels are above threshold, use traditional average
+            m = (ch1 + ch2 + ch3 + ch4) // 4
+
+        # Ensure we stay within int16 range
+        m = max(-32768, min(32767, m))
         out.extend(struct.pack("<hh", m, m))  # L = m, R = m
 
     return bytes(out)
