@@ -309,6 +309,52 @@ def send_webhook_async(file_path):
         logger.error(f"Failed to start webhook thread: {e}")
 
 
+def normalize_audio_file(file_path):
+    """Normalize audio file to maximize volume without clipping"""
+    try:
+        # Read the original file
+        with wave.open(file_path, 'rb') as wf:
+            frames = wf.readframes(wf.getnframes())
+            params = wf.getparams()
+
+        # Find peak amplitude across all channels (4-channel int16)
+        peak = audioop.max(frames, 2)  # 2 bytes per sample for int16
+
+        if peak == 0:
+            logger.warning(f"Normalization skipped: {file_path} (silent audio)")
+            return
+
+        # Calculate scaling factor (target 90% of max to leave headroom)
+        target_level = int(32767 * 0.9)  # 90% of int16 max
+        scale_factor = target_level / peak
+
+        if scale_factor <= 1.0:
+            logger.info(f"Normalization skipped: {file_path} (already at good level)")
+            return
+
+        # Scale the audio
+        normalized_frames = audioop.mul(frames, 2, scale_factor)
+
+        # Write normalized version (replace original)
+        with wave.open(file_path, 'wb') as wf:
+            wf.setparams(params)
+            wf.writeframes(normalized_frames)
+
+        logger.info(f"Normalized {file_path} (boost: {scale_factor:.1f}x)")
+
+    except Exception as e:
+        logger.error(f"Normalization error for {file_path}: {e}")
+
+
+def normalize_audio_async(file_path):
+    """Normalize audio in background thread"""
+    try:
+        normalize_thread = threading.Thread(target=normalize_audio_file, args=(file_path,), daemon=True)
+        normalize_thread.start()
+    except Exception as e:
+        logger.error(f"Failed to start normalization thread: {e}")
+
+
 def systemd_watchdog_loop():
     """Background thread to send systemd watchdog pings every 15 seconds"""
     while True:
@@ -423,6 +469,8 @@ def main():
                                 pass
                         else:
                             logger.info(f"Recording completed: {duration:.2f}s")
+                            # Normalize audio to boost volume
+                            normalize_audio_async(current_filename)
                             if WEBHOOK_ENABLED:
                                 send_webhook_async(current_filename)
                             else:
@@ -444,6 +492,8 @@ def main():
 
                 if duration >= MIN_RECORD_SECONDS:
                     logger.info(f"Final recording saved: {duration:.2f}s")
+                    # Normalize audio to boost volume
+                    normalize_audio_async(current_filename)
                     if WEBHOOK_ENABLED:
                         send_webhook_async(current_filename)
                     else:
