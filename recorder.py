@@ -476,13 +476,14 @@ def main():
                         record_start_time = time.time()
                         silence_time = 0.0
 
-                        # Log and update OLED (non-blocking)
-                        logger.info(f"Recording started (level={level})")
-                        # Update OLED in background thread to avoid blocking audio
-                        threading.Thread(target=show_rec, args=(device,), daemon=True).start()
+                        # Process and write first audio block
+                        stereo_data = mix4_to_stereo_mono(data)
+                        wav_file.writeframes(stereo_data)
 
-                if recording:
-                    # Process and write audio (happens for first block too)
+                        logger.info(f"Recording started (level={level})")
+                        show_rec(device)
+                else:
+                    # Process and write audio (continuing recording)
                     stereo_data = mix4_to_stereo_mono(data)
                     wav_file.writeframes(stereo_data)
 
