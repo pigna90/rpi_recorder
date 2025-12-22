@@ -255,9 +255,9 @@ def audio_timeout_handler(signum, frame):
 
 def open_new_wav():
     ts = time.strftime("%Y%m%d_%H%M%S")
-    filename = f"recordings/vad_{ts}_stereo.wav"
+    filename = f"recordings/vad_{ts}_4ch.wav"
     wf = wave.open(filename, "wb")
-    wf.setnchannels(2)       # stereo output (mixed from 4ch)
+    wf.setnchannels(4)       # 4-channel during recording (no processing)
     wf.setsampwidth(2)       # int16
     wf.setframerate(SAMPLE_RATE)
     return wf, filename
@@ -368,6 +368,35 @@ def normalize_audio_file(file_path):
         logger.error(f"Normalization error for {file_path}: {e}")
 
 
+def convert_4ch_to_stereo(input_path):
+    """Convert 4-channel file to stereo file using summing mix"""
+    try:
+        # Generate stereo filename
+        stereo_path = input_path.replace("_4ch.wav", "_stereo.wav")
+
+        # Read 4-channel file
+        with wave.open(input_path, 'rb') as wf_in:
+            frames = wf_in.readframes(wf_in.getnframes())
+            params = wf_in.getparams()
+
+        # Mix to stereo using our summing function
+        stereo_frames = mix4_to_stereo_sum(frames)
+
+        # Write stereo file
+        with wave.open(stereo_path, 'wb') as wf_out:
+            wf_out.setnchannels(2)  # stereo
+            wf_out.setsampwidth(params.sampwidth)
+            wf_out.setframerate(params.framerate)
+            wf_out.writeframes(stereo_frames)
+
+        logger.info(f"Converted to stereo: {stereo_path}")
+        return stereo_path
+
+    except Exception as e:
+        logger.error(f"4ch to stereo conversion error: {e}")
+        return input_path  # Return original if conversion fails
+
+
 def normalize_audio_async(file_path):
     """Normalize audio in background thread"""
     try:
@@ -467,14 +496,12 @@ def main():
                         silence_time = 0.0
                         recording = True
 
-                        stereo_data = mix4_to_stereo_sum(data)
-                        wav_file.writeframes(stereo_data)
+                        wav_file.writeframes(data)
 
                         logger.info(f"Recording started (level={level})")
                         show_rec(device)
                 else:
-                    stereo_data = mix4_to_stereo_sum(data)
-                    wav_file.writeframes(stereo_data)
+                    wav_file.writeframes(data)
 
                     if level < THRESHOLD:
                         silence_time += BLOCK_DURATION
@@ -493,12 +520,19 @@ def main():
                                 pass
                         else:
                             logger.info(f"Recording completed: {duration:.2f}s")
-                            # Normalize audio to boost volume (sequential - blocks until done)
-                            normalize_audio_file(current_filename)
+                            # Convert 4ch to stereo, then normalize
+                            stereo_filename = convert_4ch_to_stereo(current_filename)
+                            normalize_audio_file(stereo_filename)
                             if WEBHOOK_ENABLED:
-                                send_webhook_async(current_filename)  # Now sends normalized file
+                                send_webhook_async(stereo_filename)  # Send stereo normalized file
                             else:
                                 logger.info("Webhook disabled - recording saved locally")
+                            # Clean up 4ch file to save space
+                            try:
+                                os.remove(current_filename)
+                                logger.info(f"Cleaned up 4ch file: {current_filename}")
+                            except OSError:
+                                pass
 
                         recording = False
                         wav_file = None
@@ -516,12 +550,19 @@ def main():
 
                 if duration >= MIN_RECORD_SECONDS:
                     logger.info(f"Final recording saved: {duration:.2f}s")
-                    # Normalize audio to boost volume (sequential - blocks until done)
-                    normalize_audio_file(current_filename)
+                    # Convert 4ch to stereo, then normalize
+                    stereo_filename = convert_4ch_to_stereo(current_filename)
+                    normalize_audio_file(stereo_filename)
                     if WEBHOOK_ENABLED:
-                        send_webhook_async(current_filename)  # Now sends normalized file
+                        send_webhook_async(stereo_filename)  # Send stereo normalized file
                     else:
                         logger.info("Webhook disabled - recording saved locally")
+                    # Clean up 4ch file to save space
+                    try:
+                        os.remove(current_filename)
+                        logger.info(f"Cleaned up 4ch file: {current_filename}")
+                    except OSError:
+                        pass
                 else:
                     try:
                         os.remove(current_filename)
