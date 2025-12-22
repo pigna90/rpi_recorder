@@ -324,8 +324,8 @@ def normalize_audio_file(file_path):
             logger.warning(f"Normalization skipped: {file_path} (silent audio)")
             return
 
-        # Calculate scaling factor (target 90% of max to leave headroom)
-        target_level = int(32767 * 0.9)  # 90% of int16 max
+        # Calculate scaling factor (target 95% of max to leave headroom)
+        target_level = int(32767 * 0.95)  # 95% of int16 max
         scale_factor = target_level / peak
 
         if scale_factor <= 1.0:
