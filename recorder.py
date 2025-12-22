@@ -469,10 +469,10 @@ def main():
                                 pass
                         else:
                             logger.info(f"Recording completed: {duration:.2f}s")
-                            # Normalize audio to boost volume
-                            normalize_audio_async(current_filename)
+                            # Normalize audio to boost volume (sequential - blocks until done)
+                            normalize_audio_file(current_filename)
                             if WEBHOOK_ENABLED:
-                                send_webhook_async(current_filename)
+                                send_webhook_async(current_filename)  # Now sends normalized file
                             else:
                                 logger.info("Webhook disabled - recording saved locally")
 
@@ -492,10 +492,10 @@ def main():
 
                 if duration >= MIN_RECORD_SECONDS:
                     logger.info(f"Final recording saved: {duration:.2f}s")
-                    # Normalize audio to boost volume
-                    normalize_audio_async(current_filename)
+                    # Normalize audio to boost volume (sequential - blocks until done)
+                    normalize_audio_file(current_filename)
                     if WEBHOOK_ENABLED:
-                        send_webhook_async(current_filename)
+                        send_webhook_async(current_filename)  # Now sends normalized file
                     else:
                         logger.info("Webhook disabled - recording saved locally")
                 else:
